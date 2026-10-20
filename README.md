@@ -33,3 +33,25 @@ when any 3-field combination is identical and non-missing; connected components
 
 `books.author` is split on commas into a set of authors. "Most popular" is the author
 set with the most sold books (`sum(quantity)`); the per-author ranking is also stored.
+
+## Dashboard
+
+A static dashboard (`index.html`, no server needed) shows the results for all five
+stores: overview (unique users, unique author sets, most popular author, best buyer
+with all ids), revenue (top-5 days and the daily revenue chart) and an
+"Ask the data" chat area that answers questions from the computed results.
+
+Live version (GitHub Pages): https://ulfan39.github.io/bookstore-analytics/
+
+Rebuild after re-running the pipeline:
+
+    python run_all.py <folder with STORE1..STORE5>
+    python build_dashboard.py
+
+## Assumptions
+
+- Real users are counted over the records in `users.csv`.
+- "Most popular author" is the author *set* with the most sold books; the best
+  individual author (counting every book they co-wrote) is shown next to it.
+- The chat area is rule-based: it answers from the pipeline output and does not call
+  an external AI service.

@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bookstore Analytics</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f4f1;
+    --surface-1: #fcfcfb;
+    --border: #e3e2dc;
+    --grid: #ecebe6;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #77766f;
+    --series-1: #2a78d6;
+    --accent-wash: #e8f0fb;
+    --focus: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-0: #121211;
+      --surface-1: #1a1a19;
+      --border: #2e2d2a;
+      --grid: #262624;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8f8e86;
+      --series-1: #3987e5;
+      --accent-wash: #1e2a3b;
+      --focus: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #121211;
+    --surface-1: #1a1a19;
+    --border: #2e2d2a;
+    --grid: #262624;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86;
+    --series-1: #3987e5;
+    --accent-wash: #1e2a3b;
+    --focus: #3987e5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); padding: 2px; }
+  .seg button {
+    border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent-wash); color: var(--text-primary); font-weight: 600; }
+  .seg button:hover { color: var(--text-primary); }
+  button:focus-visible, .chart-hit:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .icon-btn { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+
+  nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; }
+  nav.tabs button {
+    border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-weight: 500;
+    padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+  }
+  nav.tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--series-1); }
+
+  .grid { display: grid; gap: 16px; }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  .two { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .rev-grid { grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); }
+  @media (max-width: 820px) { .rev-grid { grid-template-columns: minmax(0, 1fr); } .two { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .card h2 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .hero { font-size: 34px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .note { color: var(--text-muted); font-size: 12.5px; margin-top: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { border: 1px solid var(--border); background: var(--surface-0); border-radius: 999px; padding: 2px 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .authors li { margin: 2px 0; }
+  ul { padding-left: 18px; margin: 6px 0 0; }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 12.5px; }
+  td.num, th.num { text-align: right; }
+  .rank { color: var(--text-muted); width: 28px; }
+  .scroll { max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; }
+
+  /* chart */
+  .chart-box { position: relative; }
+  svg.chart { width: 100%; height: auto; display: block; touch-action: pan-y; }
+  .chart .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .chart .axis-text { fill: var(--text-muted); font-size: 11px; }
+  .chart .line { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .area { fill: var(--series-1); opacity: 0.08; }
+  .chart .peak { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+  .chart .peak-label { fill: var(--text-primary); font-size: 11px; font-weight: 600; text-anchor: middle; }
+  .chart .cross { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .chart .hover-dot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    white-space: nowrap; transform: translate(-50%, -100%); z-index: 2;
+  }
+  .tooltip .v { font-weight: 650; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  .tooltip .k { display: inline-block; width: 12px; height: 2px; background: var(--series-1); }
+  .tooltip .d { color: var(--text-secondary); font-size: 12px; }
+  .legend { display: flex; gap: 14px; align-items: center; color: var(--text-secondary); font-size: 12.5px; margin: 0 0 6px; flex-wrap: wrap; }
+  .legend .k { display: inline-block; width: 14px; height: 2px; background: var(--series-1); vertical-align: middle; margin-right: 6px; }
+  .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--series-1); margin-right: 6px; }
+
+  /* chat */
+  .chat { display: flex; flex-direction: column; height: 520px; }
+  .log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 12px; }
+  .msg { max-width: 82%; padding: 9px 13px; border-radius: 12px; white-space: pre-wrap; font-size: 14.5px; }
+  .msg.bot { background: var(--surface-0); border: 1px solid var(--border); align-self: flex-start; }
+  .msg.me { background: var(--accent-wash); align-self: flex-end; }
+  .ask { display: flex; gap: 8px; margin-top: 8px; }
+  .ask input { flex: 1; font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-0); color: var(--text-primary); }
+  .ask button { font: inherit; padding: 9px 16px; border-radius: 8px; border: 0; background: var(--series-1); color: #fff; cursor: pointer; font-weight: 600; }
+  .suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .suggest button { border: 1px solid var(--border); background: var(--surface-0); color: var(--text-secondary); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .suggest button:hover { color: var(--text-primary); }
+  footer { margin-top: 28px; color: var(--text-muted); font-size: 12.5px; }
+  footer a { color: var(--text-secondary); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Bookstore Analytics</h1>
+      <div class="sub">Orders, readers and authors across five stores</div>
+    </div>
+    <div class="controls">
+      <div class="seg" id="stores" role="group" aria-label="Store"></div>
+      <button class="icon-btn" id="theme" type="button" aria-label="Toggle dark mode">Theme</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button role="tab" id="tab-overview" aria-selected="true" data-view="overview">Overview</button>
+    <button role="tab" id="tab-revenue" aria-selected="false" data-view="revenue">Revenue</button>
+    <button role="tab" id="tab-chat" aria-selected="false" data-view="chat">Ask the data</button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
+    <div class="grid kpis">
+      <div class="card"><h2>Unique users</h2><div class="hero" id="k-users"></div><div class="note" id="k-users-note"></div></div>
+      <div class="card"><h2>Unique author sets</h2><div class="hero" id="k-sets"></div><div class="note">Distinct groups of co-authors in the catalogue</div></div>
+      <div class="card"><h2>Total revenue</h2><div class="hero" id="k-rev"></div><div class="note" id="k-rev-note"></div></div>
+    </div>
+    <div class="grid two" style="margin-top:16px">
+      <div class="card">
+        <h2>Most popular author(s)</h2>
+        <div id="k-author"></div>
+        <div class="note" id="k-author-note"></div>
+      </div>
+      <div class="card">
+        <h2>Best buyer</h2>
+        <div class="hero" id="k-buyer-spent"></div>
+        <div class="note">Total spent, all accounts of this buyer combined</div>
+        <div class="chips" id="k-buyer-ids"></div>
+        <div class="note" id="k-buyer-array"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REVENUE -->
+  <section id="view-revenue" role="tabpanel" aria-labelledby="tab-revenue" hidden>
+    <div class="grid rev-grid">
+      <div class="card">
+        <h2>Daily revenue</h2>
+        <div class="legend"><span><span class="k"></span>Revenue per day (USD)</span><span><span class="dot"></span>Top 5 days</span></div>
+        <div class="chart-box" id="chart-box"></div>
+      </div>
+      <div class="card">
+        <h2>Top 5 days by revenue</h2>
+        <table>
+          <thead><tr><th class="rank">#</th><th>Date</th><th class="num">Revenue</th></tr></thead>
+          <tbody id="top5"></tbody>
+        </table>
+        <div style="margin-top:14px">
+          <button class="icon-btn" id="table-toggle" type="button" aria-expanded="false">Show all days as table</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="all-days" style="margin-top:16px" hidden>
+      <h2>All days</h2>
+      <div class="scroll"><table><thead><tr><th>Date</th><th class="num">Revenue</th></tr></thead><tbody id="all-days-body"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- CHAT -->
+  <section id="view-chat" role="tabpanel" aria-labelledby="tab-chat" hidden>
+    <div class="card chat">
+      <div class="log" id="log" aria-live="polite"></div>
+      <div class="suggest" id="suggest"></div>
+      <form class="ask" id="ask" autocomplete="off">
+        <input id="q" type="text" placeholder="Ask about users, authors, best buyer, revenue…" aria-label="Your question">
+        <button type="submit">Send</button>
+      </form>
+    </div>
+    <div class="note" style="margin-top:8px">The assistant answers from the numbers computed by the pipeline (no external AI service). It understands questions about users, author sets, popular authors, best buyer, top days and revenue, for one store or all five.</div>
+  </section>
+
+  <footer>Code and method: <a href="https://github.com/ulfan39/bookstore-analytics">github.com/ulfan39/bookstore-analytics</a>. Prices converted at €1 = $1.20.</footer>
+</div>
+
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("data").textContent);
+  var STORES = Object.keys(DATA);
+  var state = { store: STORES[0], view: "overview", showTable: false };
+
+  function $(id) { return document.getElementById(id); }
+  function money(n) { return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function int(n) { return Number(n).toLocaleString("en-US"); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function pretty(name) { return name.replace("STORE", "Store "); }
+
+  // ---------- store selector ----------
+  var storeBox = $("stores");
+  STORES.forEach(function (s) {
+    var b = el("button", null, pretty(s));
+    b.type = "button"; b.dataset.store = s;
+    b.addEventListener("click", function () { state.store = s; render(); });
+    storeBox.appendChild(b);
+  });
+
+  // ---------- tabs ----------
+  Array.prototype.forEach.call(document.querySelectorAll("nav.tabs button"), function (b) {
+    b.addEventListener("click", function () { state.view = b.dataset.view; render(); });
+  });
+
+  // ---------- theme ----------
+  var root = document.documentElement;
+  $("theme").addEventListener("click", function () {
+    var dark = root.dataset.theme ? root.dataset.theme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+  });
+
+  // ---------- overview ----------
+  function renderOverview(d) {
+    $("k-users").textContent = int(d.unique_users);
+    $("k-users-note").textContent = "Real people after merging changed address, phone, e-mail or alias";
+    $("k-sets").textContent = int(d.unique_author_sets);
+    $("k-rev").textContent = money(d.total_revenue);
+    $("k-rev-note").textContent = int(d.orders) + " orders";
+
+    var a = $("k-author"); clear(a);
+    var sets = d.top_author_sets.sets;
+    var ul = el("ul", "authors");
+    sets.forEach(function (set) { ul.appendChild(el("li", null, set.join(" & "))); });
+    a.appendChild(ul);
+    var note = d.top_author_sets.sold + " books sold by this author set";
+    var ta = d.top_authors;
+    var single = ta.authors.join(", ");
+    $("k-author-note").textContent = note + ". By individual author (all books they co-wrote): " + single + " with " + ta.sold + " books.";
+
+    $("k-buyer-spent").textContent = money(d.best_buyer.total_spent);
+    var chips = $("k-buyer-ids"); clear(chips);
+    d.best_buyer.user_ids.forEach(function (id) { chips.appendChild(el("span", "chip", String(id))); });
+    $("k-buyer-array").textContent = "[" + d.best_buyer.user_ids.join(", ") + "]";
+  }
+
+  // ---------- revenue ----------
+  function fmtDate(iso) { return iso; }
+  function niceStep(max, ticks) {
+    var raw = max / ticks, mag = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / mag;
+    var f = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+    return f * mag;
+  }
+  function renderRevenue(d) {
+    var tb = $("top5"); clear(tb);
+    d.top5_days.forEach(function (r, i) {
+      var tr = el("tr");
+      tr.appendChild(el("td", "rank", String(i + 1)));
+      tr.appendChild(el("td", null, r.date));
+      tr.appendChild(el("td", "num", money(r.revenue)));
+      tb.appendChild(tr);
+    });
+    var body = $("all-days-body"); clear(body);
+    d.daily_revenue.forEach(function (r) {
+      var tr = el("tr");
+      tr.appendChild(el("td", null, r.date));
+      tr.appendChild(el("td", "num", money(r.revenue)));
+      body.appendChild(tr);
+    });
+    $("all-days").hidden = !state.showTable;
+    $("table-toggle").textContent = state.showTable ? "Hide table" : "Show all days as table";
+    $("table-toggle").setAttribute("aria-expanded", String(state.showTable));
+    drawChart(d);
+  }
+  $("table-toggle").addEventListener("click", function () { state.showTable = !state.showTable; render(); });
+
+  var NS = "http://www.w3.org/2000/svg";
+  function s(tag, attrs) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+  function drawChart(d) {
+    var box = $("chart-box"); clear(box);
+    var pts = d.daily_revenue.map(function (r) { return { t: Date.parse(r.date + "T00:00:00Z"), v: r.revenue, d: r.date }; });
+    if (!pts.length) return;
+    var W = Math.max(box.clientWidth, 320), H = 340;
+    var m = { l: 56, r: 14, t: 18, b: 28 };
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+    var maxV = Math.max.apply(null, pts.map(function (p) { return p.v; }));
+    var step = niceStep(maxV, 5), top = Math.ceil(maxV / step) * step;
+    function X(t) { return m.l + (t - t0) / (t1 - t0 || 1) * iw; }
+    function Y(v) { return m.t + ih - v / top * ih; }
+
+    var svg = s("svg", { "class": "chart", viewBox: "0 0 " + W + " " + H, role: "img",
+      "aria-label": "Line chart of daily revenue in USD for " + pretty(state.store) });
+    for (var v = 0; v <= top + 1e-9; v += step) {
+      svg.appendChild(s("line", { "class": "grid-line", x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) }));
+      var tx = s("text", { "class": "axis-text", x: m.l - 8, y: Y(v) + 4, "text-anchor": "end" });
+      tx.textContent = "$" + int(v); svg.appendChild(tx);
+    }
+    // monthly ticks: every 2 months, every 4 on narrow screens
+    var first = new Date(t0), cur = Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 1), idx = 0;
+    var mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    while (cur <= t1) {
+      var dt = new Date(cur);
+      if (dt.getUTCMonth() % (iw < 520 ? 4 : 2) === 0) {
+        var lbl = s("text", { "class": "axis-text", x: X(cur), y: H - 8, "text-anchor": "middle" });
+        lbl.textContent = mon[dt.getUTCMonth()] + (dt.getUTCMonth() === 0 ? " " + dt.getUTCFullYear() : "");
+        svg.appendChild(lbl);
+      }
+      cur = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 1);
+    }
+    var line = "M" + pts.map(function (p) { return X(p.t).toFixed(1) + " " + Y(p.v).toFixed(1); }).join("L");
+    svg.appendChild(s("path", { "class": "area", d: line + "L" + X(t1) + " " + Y(0) + "L" + X(t0) + " " + Y(0) + "Z" }));
+    svg.appendChild(s("path", { "class": "line", d: line }));
+
+    // top-5 days: markers + rank labels
+    var byDate = {}; pts.forEach(function (p) { byDate[p.d] = p; });
+    d.top5_days.forEach(function (r, i) {
+      var p = byDate[r.date]; if (!p) return;
+      svg.appendChild(s("circle", { "class": "peak", cx: X(p.t), cy: Y(p.v), r: 4.5 }));
+      var lb = s("text", { "class": "peak-label", x: X(p.t), y: Y(p.v) - 10 });
+      lb.textContent = String(i + 1); svg.appendChild(lb);
+    });
+
+    var cross = s("line", { "class": "cross", y1: m.t, y2: m.t + ih, visibility: "hidden" });
+    var dot = s("circle", { "class": "hover-dot", r: 4.5, visibility: "hidden" });
+    svg.appendChild(cross); svg.appendChild(dot);
+    var hit = s("rect", { "class": "chart-hit", x: m.l, y: m.t, width: iw, height: ih, fill: "transparent", tabindex: 0,
+      "aria-label": "Chart: use left and right arrow keys to read daily values" });
+    svg.appendChild(hit);
+    box.appendChild(svg);
+
+    var tip = el("div", "tooltip"); tip.hidden = true;
+    var tv = el("div", "v"), tk = el("span", "k"), tvt = el("span"), td = el("div", "d");
+    tv.appendChild(tk); tv.appendChild(tvt); tip.appendChild(tv); tip.appendChild(td);
+    box.appendChild(tip);
+
+    var cur_i = -1;
+    function show(i) {
+      i = Math.max(0, Math.min(pts.length - 1, i)); cur_i = i;
+      var p = pts[i], x = X(p.t), y = Y(p.v), scale = box.clientWidth / W;
+      cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
+      dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("visibility", "visible");
+      tvt.textContent = money(p.v); td.textContent = p.d;
+      tip.hidden = false;
+      var left = Math.max(64, Math.min(box.clientWidth - 64, x * scale));
+      tip.style.left = left + "px"; tip.style.top = Math.max(40, y * scale - 12) + "px";
+    }
+    function hide() { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); tip.hidden = true; }
+    function nearest(clientX) {
+      var r = svg.getBoundingClientRect(), x = (clientX - r.left) * (W / r.width), t = t0 + (x - m.l) / iw * (t1 - t0);
+      var lo = 0, hi = pts.length - 1;
+      while (lo < hi) { var mid = (lo + hi) >> 1; if (pts[mid].t < t) lo = mid + 1; else hi = mid; }
+      if (lo > 0 && Math.abs(pts[lo - 1].t - t) < Math.abs(pts[lo].t - t)) lo--;
+      return lo;
+    }
+    hit.addEventListener("pointermove", function (e) { show(nearest(e.clientX)); });
+    hit.addEventListener("pointerleave", hide);
+    hit.addEventListener("focus", function () { show(cur_i < 0 ? 0 : cur_i); });
+    hit.addEventListener("blur", hide);
+    hit.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") { show(cur_i + 1); e.preventDefault(); }
+      if (e.key === "ArrowLeft") { show(cur_i - 1); e.preventDefault(); }
+    });
+  }
+
+  // ---------- chat ----------
+  var log = $("log");
+  function say(text, who) { var m = el("div", "msg " + who, text); log.appendChild(m); log.scrollTop = log.scrollHeight; }
+
+  function storeLine(name, d, what) {
+    var b = d.best_buyer;
+    switch (what) {
+      case "users": return pretty(name) + ": " + int(d.unique_users) + " unique users.";
+      case "sets": return pretty(name) + ": " + int(d.unique_author_sets) + " unique author sets.";
+      case "author":
+        return pretty(name) + ": " + d.top_author_sets.sets.map(function (s) { return s.join(" & "); }).join(" | ") +
+          " (" + d.top_author_sets.sold + " books sold by that author set). Top individual author: " +
+          d.top_authors.authors.join(", ") + " (" + d.top_authors.sold + " books).";
+      case "buyer": return pretty(name) + ": best buyer spent " + money(b.total_spent) + ", ids [" + b.user_ids.join(", ") + "].";
+      case "days": return pretty(name) + " top days: " + d.top5_days.map(function (r) { return r.date + " (" + money(r.revenue) + ")"; }).join(", ") + ".";
+      case "revenue": return pretty(name) + ": " + money(d.total_revenue) + " from " + int(d.orders) + " orders.";
+      case "cleaning": return pretty(name) + ": " + int(d.cleaning.rows_in) + " order rows in, " + d.cleaning.malformed_dropped + " malformed and " + d.cleaning.duplicates_dropped + " duplicates removed, " + int(d.cleaning.rows_out) + " kept.";
+    }
+  }
+  function intent(q) {
+    if (/(clean|malform|duplic|missing|quality)/.test(q)) return "cleaning";
+    if (/(best|top)\s*(buyer|customer|client|spender)|biggest (buyer|spender)|spent most|spending|alias/.test(q) || /(buyer|customer)/.test(q)) return "buyer";
+    if (/(author set|sets of author|co-?author|set)/.test(q)) return "sets";
+    if (/(popular|bestsell|best[- ]sell|top author|author)/.test(q)) return "author";
+    if (/(user|reader|people|real)/.test(q)) return "users";
+    if (/(day|date|peak|best day)/.test(q)) return "days";
+    if (/(revenue|sales|income|total|order)/.test(q)) return "revenue";
+    return null;
+  }
+  function reply(raw) {
+    var q = raw.toLowerCase(), what = intent(q);
+    if (!what) return "I can answer questions about unique users, author sets, the most popular author, the best buyer, the top revenue days, total revenue and data cleaning. Try “Who is the best buyer in store 2?” or “Compare unique users across stores”.";
+    var m = q.match(/store\s*([1-5])/);
+    var all = /(all|every|each|compare|across|stores)/.test(q) && !m;
+    var names = m ? ["STORE" + m[1]] : all ? STORES : [state.store];
+    return names.map(function (n) { return storeLine(n, DATA[n], what); }).join("\n");
+  }
+  function ask(text) {
+    text = text.trim(); if (!text) return;
+    say(text, "me"); say(reply(text), "bot");
+  }
+  $("ask").addEventListener("submit", function (e) { e.preventDefault(); var i = $("q"); ask(i.value); i.value = ""; });
+  ["How many unique users are there?", "How many unique author sets?", "Who is the most popular author?",
+   "Who is the best buyer?", "What are the top revenue days?", "Compare unique users across all stores"].forEach(function (t) {
+    var b = el("button", null, t); b.type = "button"; b.addEventListener("click", function () { ask(t); });
+    $("suggest").appendChild(b);
+  });
+  say("Hi! Ask me about the selected store (or name one, e.g. “store 3”), or say “all stores” to compare.", "bot");
+
+  // ---------- render ----------
+  function render() {
+    var d = DATA[state.store];
+    Array.prototype.forEach.call(storeBox.children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.store === state.store)); });
+    ["overview", "revenue", "chat"].forEach(function (v) {
+      $("view-" + v).hidden = state.view !== v;
+      $("tab-" + v).setAttribute("aria-selected", String(state.view === v));
+    });
+    renderOverview(d);
+    if (state.view === "revenue") renderRevenue(d);
+  }
+  var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { if (state.view === "revenue") drawChart(DATA[state.store]); }, 120); });
+  render();
+})();
+</script>
+</body>
+</html>
