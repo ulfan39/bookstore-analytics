@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="api-base" content="/*__API__*/">
+<meta name="live-url" content="/*__LIVE__*/">
 <title>Bookstore Analytics</title>
 <style>
   :root {
@@ -133,6 +135,32 @@
   .suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .suggest button { border: 1px solid var(--border); background: var(--surface-0); color: var(--text-secondary); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12.5px; cursor: pointer; }
   .suggest button:hover { color: var(--text-primary); }
+
+  /* tables */
+  .tbl-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .tbl-tools .grow { flex: 1; }
+  .fchip { display: inline-flex; align-items: center; border: 1px solid var(--border); background: var(--accent-wash); border-radius: 999px; padding: 2px 4px 2px 11px; font-size: 13px; }
+  .fchip button { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 7px; }
+  .tbl-wrap { overflow: auto; max-height: 560px; border: 1px solid var(--border); border-radius: 8px; }
+  .tbl-wrap th { position: sticky; top: 0; background: var(--surface-1); white-space: nowrap; }
+  .tbl-wrap td { vertical-align: top; max-width: 320px; overflow-wrap: anywhere; padding: 8px 10px; }
+  .tbl-wrap th { padding: 8px 10px; }
+  .tbl-wrap table { min-width: 760px; }
+  .tbl-wrap td:first-child, .tbl-wrap td:last-child { white-space: nowrap; }
+  .tbl-wrap td:nth-child(2) { min-width: 170px; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text-primary); }
+  .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--text-secondary); font-size: 13px; }
+  .pager button:disabled { opacity: .4; cursor: default; }
+
+  /* assistant panel */
+  .assistant { position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 100%); background: var(--surface-1); border-left: 1px solid var(--border); z-index: 20; display: flex; flex-direction: column; padding: 14px 14px 12px; box-shadow: -8px 0 24px rgba(0,0,0,.08); }
+  .assistant .a-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .assistant .a-head strong { font-size: 15px; }
+  .assistant .a-head .note { margin: 0; flex: 1; }
+  .assistant .log { min-height: 0; }
+  .assistant .msg { max-width: 92%; }
+  @media (min-width: 1100px) { body.assist-open .wrap { margin-right: 400px; max-width: none; } }
   footer { margin-top: 28px; color: var(--text-muted); font-size: 12.5px; }
   footer a { color: var(--text-secondary); }
   [hidden] { display: none !important; }
@@ -147,6 +175,7 @@
     </div>
     <div class="controls">
       <div class="seg" id="stores" role="group" aria-label="Store"></div>
+      <button class="icon-btn" id="assist-btn" type="button" aria-expanded="false">Assistant</button>
       <button class="icon-btn" id="theme" type="button" aria-label="Toggle dark mode">Theme</button>
     </div>
   </header>
@@ -154,7 +183,8 @@
   <nav class="tabs" role="tablist" aria-label="Views">
     <button role="tab" id="tab-overview" aria-selected="true" data-view="overview">Overview</button>
     <button role="tab" id="tab-revenue" aria-selected="false" data-view="revenue">Revenue</button>
-    <button role="tab" id="tab-chat" aria-selected="false" data-view="chat">Ask the data</button>
+    <button role="tab" id="tab-books" aria-selected="false" data-view="books">Books</button>
+    <button role="tab" id="tab-users" aria-selected="false" data-view="users">Users</button>
   </nav>
 
   <!-- OVERVIEW -->
@@ -205,21 +235,18 @@
     </div>
   </section>
 
-  <!-- CHAT -->
-  <section id="view-chat" role="tabpanel" aria-labelledby="tab-chat" hidden>
-    <div class="card chat">
-      <div class="log" id="log" aria-live="polite"></div>
-      <div class="suggest" id="suggest"></div>
-      <form class="ask" id="ask" autocomplete="off">
-        <input id="q" type="text" placeholder="Ask about users, authors, best buyer, revenue…" aria-label="Your question">
-        <button type="submit">Send</button>
-      </form>
-    </div>
-    <div class="note" style="margin-top:8px">The assistant answers from the numbers computed by the pipeline (no external AI service). It understands questions about users, author sets, popular authors, best buyer, top days and revenue, for one store or all five.</div>
-  </section>
-
   <footer>Code and method: <a href="https://github.com/ulfan39/bookstore-analytics">github.com/ulfan39/bookstore-analytics</a>. Prices converted at €1 = $1.20.</footer>
 </div>
+
+<aside id="assistant" class="assistant" aria-label="AI assistant" hidden>
+  <div class="a-head"><strong>Assistant</strong><span class="note" id="a-status"></span><button class="icon-btn" id="a-close" type="button">Close</button></div>
+  <div class="log" id="log" aria-live="polite"></div>
+  <div class="suggest" id="suggest"></div>
+  <form class="ask" id="ask" autocomplete="off">
+    <input id="q" type="text" placeholder="Ask a question or give a command…" aria-label="Your message">
+    <button type="submit">Send</button>
+  </form>
+</aside>
 
 <script id="data" type="application/json">/*__DATA__*/</script>
 <script>
@@ -227,7 +254,8 @@
   "use strict";
   var DATA = JSON.parse(document.getElementById("data").textContent);
   var STORES = Object.keys(DATA);
-  var state = { store: STORES[0], view: "overview", showTable: false };
+  var state = { store: STORES[0], view: "overview", showTable: false, assist: window.innerWidth >= 1100,
+    f: { books: { conds: [], match: "all", sort: null, dir: "asc", page: 1 }, users: { conds: [], match: "all", sort: null, dir: "asc", page: 1 } } };
 
   function $(id) { return document.getElementById(id); }
   function money(n) { return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -401,10 +429,114 @@
     });
   }
 
-  // ---------- chat ----------
-  var log = $("log");
-  function say(text, who) { var m = el("div", "msg " + who, text); log.appendChild(m); log.scrollTop = log.scrollHeight; }
+  // ---------- server ----------
+  function meta(n) { var m = document.querySelector('meta[name="' + n + '"]'); var c = m ? m.content : ""; return c.indexOf("__") >= 0 ? "" : c; }
+  var API = (new URLSearchParams(location.search).get("api") || meta("api-base") || "").replace(/\/$/, "");
+  var LIVE = meta("live-url");
+  var server = { ok: false, llm: false, checked: false };
+  function api(path, body, ms) {
+    var ctl = new AbortController(), to = setTimeout(function () { ctl.abort(); }, ms || 90000);
+    var opt = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal } : { signal: ctl.signal };
+    return fetch(API + path, opt).then(function (r) { clearTimeout(to); return r.json().then(function (j) { return { status: r.status, json: j }; }); });
+  }
+  function setStatus() {
+    $("a-status").textContent = !server.checked ? "connecting to server…" : server.ok ? (server.llm ? "AI connected" : "server up, AI key missing") : "offline: built-in answers only";
+  }
 
+  // ---------- tables (Books / Users) ----------
+  var COLS = {
+    books: [["id", "ID"], ["title", "Title"], ["author", "Author(s)"], ["genre", "Genre"], ["publisher", "Publisher"], ["year", "Year"]],
+    users: [["id", "ID"], ["name", "Name"], ["email", "E-mail"], ["phone", "Phone"], ["address", "Address"], ["real_user_id", "Person ID"]]
+  };
+  var LABEL = { equals: "=", not_equals: "≠", contains: "contains", not_contains: "doesn't contain", starts_with: "starts with", not_starts_with: "doesn't start with", ends_with: "ends with", not_ends_with: "doesn't end with", regex: "matches", gt: ">", gte: "≥", lt: "<", lte: "≤", between: "between", is_empty: "is empty", not_empty: "is not empty", has_person_name: "has a person name", no_person_name: "has no person name" };
+  function condText(c) {
+    var v = c.value; if (Array.isArray(v)) v = v.join(c.op === "between" ? " and " : " or ");
+    return c.field + " " + (LABEL[c.op] || c.op) + (v != null && v !== "" ? " " + v : "");
+  }
+  ["books", "users"].forEach(function (v) {
+    var sec = el("section"); sec.id = "view-" + v; sec.hidden = true; sec.setAttribute("role", "tabpanel"); sec.setAttribute("aria-labelledby", "tab-" + v);
+    var card = el("div", "card");
+    var bar = el("div", "tbl-tools"); bar.id = v + "-bar";
+    var msg = el("div", "note"); msg.id = v + "-msg";
+    var wrap = el("div", "tbl-wrap"); wrap.id = v + "-wrap";
+    var tbl = el("table"), th = el("thead"), tb = el("tbody"); th.id = v + "-head"; tb.id = v + "-body";
+    tbl.appendChild(th); tbl.appendChild(tb); wrap.appendChild(tbl);
+    var pager = el("div", "pager"); pager.id = v + "-pager";
+    [bar, msg, wrap, pager].forEach(function (n) { card.appendChild(n); });
+    sec.appendChild(card);
+    document.querySelector("footer").parentNode.insertBefore(sec, document.querySelector("footer"));
+  });
+  var seq = 0;
+  function renderTable(v) {
+    var f = state.f[v], bar = $(v + "-bar"), msg = $(v + "-msg"), wrap = $(v + "-wrap"), pager = $(v + "-pager");
+    clear(bar); clear(pager);
+    if (!server.ok) {
+      wrap.hidden = true;
+      msg.textContent = server.checked ? "The " + v + " table is served by the live server (it filters thousands of rows in a database)." : "Connecting to the server… (a free host may need up to a minute to wake up)";
+      if (server.checked && LIVE) { var a = el("a", null, " Open the live dashboard"); a.href = LIVE; msg.appendChild(a); }
+      return;
+    }
+    wrap.hidden = false; msg.textContent = "";
+    f.conds.forEach(function (c, i) {
+      var chip = el("span", "fchip", condText(c));
+      var x = el("button", null, "×"); x.type = "button"; x.setAttribute("aria-label", "Remove filter " + condText(c));
+      x.addEventListener("click", function () { f.conds.splice(i, 1); f.page = 1; render(); });
+      chip.appendChild(x); bar.appendChild(chip);
+    });
+    if (f.conds.length > 1) bar.appendChild(el("span", "note", "(" + (f.match === "any" ? "any" : "all") + " of them)"));
+    bar.appendChild(el("span", "grow"));
+    var cnt = el("span", "note", "Loading…"); cnt.id = v + "-count"; bar.appendChild(cnt);
+    if (f.conds.length) {
+      var cl = el("button", "icon-btn", "Clear filters"); cl.type = "button";
+      cl.addEventListener("click", function () { f.conds = []; f.page = 1; render(); });
+      bar.appendChild(cl);
+    }
+    var head = $(v + "-head"); clear(head);
+    var tr = el("tr");
+    COLS[v].forEach(function (c) {
+      var th = el("th", "sortable", c[1] + (f.sort === c[0] ? (f.dir === "desc" ? " ▼" : " ▲") : ""));
+      th.tabIndex = 0; th.setAttribute("aria-sort", f.sort === c[0] ? (f.dir === "desc" ? "descending" : "ascending") : "none");
+      function go() { if (f.sort === c[0]) f.dir = f.dir === "asc" ? "desc" : "asc"; else { f.sort = c[0]; f.dir = "asc"; } f.page = 1; render(); }
+      th.addEventListener("click", go); th.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+      tr.appendChild(th);
+    });
+    head.appendChild(tr);
+    var mine = ++seq;
+    api("/api/table", { view: v, store: state.store, conditions: f.conds, match: f.match, sort: f.sort, direction: f.dir, page: f.page, size: 25 }, 60000).then(function (r) {
+      if (mine !== seq) return;
+      if (r.status !== 200) { cnt.textContent = "Error: " + (r.json.detail || r.status); return; }
+      var t = r.json, idx = {}; t.columns.forEach(function (c, i) { idx[c] = i; });
+      var body = $(v + "-body"); clear(body);
+      t.rows.forEach(function (row) {
+        var tr = el("tr");
+        COLS[v].forEach(function (c) { var val = row[idx[c[0]]]; tr.appendChild(el("td", null, val == null ? "" : String(val))); });
+        body.appendChild(tr);
+      });
+      cnt.textContent = int(t.total) + " " + v + " in " + pretty(state.store);
+      var pages = Math.max(1, Math.ceil(t.total / t.size));
+      var prev = el("button", "icon-btn", "Previous"), next = el("button", "icon-btn", "Next");
+      prev.type = next.type = "button"; prev.disabled = f.page <= 1; next.disabled = f.page >= pages;
+      prev.addEventListener("click", function () { f.page--; render(); }); next.addEventListener("click", function () { f.page++; render(); });
+      pager.appendChild(prev); pager.appendChild(el("span", null, "Page " + f.page + " of " + pages)); pager.appendChild(next);
+    }).catch(function () { if (mine === seq) cnt.textContent = "The server did not answer."; });
+  }
+
+  // ---------- dashboard commands coming from the AI ----------
+  function applyCommands(cmds) {
+    (cmds || []).forEach(function (c) {
+      var f = state.f[c.view];
+      if (c.type === "set_store" && DATA[c.store]) state.store = c.store;
+      else if (c.type === "set_view") state.view = c.view;
+      else if (c.type === "set_filters" && f) { f.conds = c.add ? f.conds.concat(c.conditions) : c.conditions.slice(); f.match = c.match || "all"; f.page = 1; state.view = c.view; }
+      else if (c.type === "clear_filters" && f) { f.conds = []; f.page = 1; state.view = c.view; }
+      else if (c.type === "set_sort" && f) { f.sort = c.column; f.dir = c.direction || "asc"; f.page = 1; state.view = c.view; }
+    });
+    render();
+  }
+
+  // ---------- assistant ----------
+  var log = $("log"), history = [], busy = false;
+  function say(text, who) { var m = el("div", "msg " + who, text); log.appendChild(m); log.scrollTop = log.scrollHeight; return m; }
   function storeLine(name, d, what) {
     var b = d.best_buyer;
     switch (what) {
@@ -439,27 +571,52 @@
     return names.map(function (n) { return storeLine(n, DATA[n], what); }).join("\n");
   }
   function ask(text) {
-    text = text.trim(); if (!text) return;
-    say(text, "me"); say(reply(text), "bot");
+    text = text.trim(); if (!text || busy) return;
+    say(text, "me");
+    if (!(server.ok && server.llm)) {
+      var r = reply(text);
+      if (/filter|select|sort|show|hide|remove/.test(text.toLowerCase()) && !intent(text.toLowerCase()))
+        r = "Controlling the tables needs the live server with the AI connected. " + (LIVE ? "Open: " + LIVE : "");
+      say(r, "bot"); return;
+    }
+    history.push({ role: "user", content: text });
+    busy = true; var wait = say("…", "bot");
+    api("/api/chat", { messages: history, state: { store: state.store, view: state.view } }, 90000).then(function (res) {
+      var t = res.json.reply || "(no answer)"; wait.textContent = t;
+      if (res.status === 200) { history.push({ role: "assistant", content: t }); applyCommands(res.json.ui_commands); }
+    }).catch(function () { wait.textContent = "The AI server did not answer. Try again."; })
+      .then(function () { busy = false; log.scrollTop = log.scrollHeight; });
   }
   $("ask").addEventListener("submit", function (e) { e.preventDefault(); var i = $("q"); ask(i.value); i.value = ""; });
-  ["How many unique users are there?", "How many unique author sets?", "Who is the most popular author?",
-   "Who is the best buyer?", "What are the top revenue days?", "Compare unique users across all stores"].forEach(function (t) {
+  ["How many unique users are there?", "Who is the best buyer?", "Filter out books that has the people names in the title",
+   "Select users with e-mails started with s or p", "What are the top revenue days?"].forEach(function (t) {
     var b = el("button", null, t); b.type = "button"; b.addEventListener("click", function () { ask(t); });
     $("suggest").appendChild(b);
   });
-  say("Hi! Ask me about the selected store (or name one, e.g. “store 3”), or say “all stores” to compare.", "bot");
+  say("Hi! Ask me about the data (“who is the best buyer in store 2?”) or tell me what to show (“select users with e-mails started with s or p”).", "bot");
+  function showAssistant(on) {
+    state.assist = on; $("assistant").hidden = !on; document.body.classList.toggle("assist-open", on);
+    $("assist-btn").setAttribute("aria-expanded", String(on));
+  }
+  $("assist-btn").addEventListener("click", function () { showAssistant(!state.assist); });
+  $("a-close").addEventListener("click", function () { showAssistant(false); });
+  api("/api/health", null, 70000).then(function (r) { server.ok = r.status === 200 && !!r.json.ok; server.llm = !!r.json.llm; })
+    .catch(function () { server.ok = false; })
+    .then(function () { server.checked = true; setStatus(); render(); });
+  setStatus();
 
   // ---------- render ----------
   function render() {
     var d = DATA[state.store];
     Array.prototype.forEach.call(storeBox.children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.store === state.store)); });
-    ["overview", "revenue", "chat"].forEach(function (v) {
+    ["overview", "revenue", "books", "users"].forEach(function (v) {
       $("view-" + v).hidden = state.view !== v;
       $("tab-" + v).setAttribute("aria-selected", String(state.view === v));
     });
+    showAssistant(state.assist);
     renderOverview(d);
     if (state.view === "revenue") renderRevenue(d);
+    if (state.view === "books" || state.view === "users") renderTable(state.view);
   }
   var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { if (state.view === "revenue") drawChart(DATA[state.store]); }, 120); });
   render();

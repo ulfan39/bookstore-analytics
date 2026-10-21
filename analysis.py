@@ -58,6 +58,7 @@ def reconcile_users(users: pd.DataFrame) -> pd.DataFrame:
     out = users.copy().reset_index(drop=True)
     out["id"] = out["id"].astype("int64")
     out["real_user"] = [find(i) for i in range(len(u))]
+    out["real_user_id"] = out.groupby("real_user")["id"].transform("min").astype("int64")
     return out
 
 
@@ -70,11 +71,17 @@ def author_sets(books: pd.DataFrame) -> pd.DataFrame:
     return b
 
 
-def run_store(folder: str | Path) -> dict:
+def process_store(folder: str | Path):
+    """Return (orders, users, books, cleaning_report) for one STORE folder."""
     data = load_store(folder)
     orders, report = clean_orders(data["orders"])
     users = reconcile_users(data["users"])
     books = author_sets(data["books"])
+    return orders, users, books, report
+
+
+def run_store(folder: str | Path) -> dict:
+    orders, users, books, report = process_store(folder)
 
     # 1. daily revenue
     daily = (

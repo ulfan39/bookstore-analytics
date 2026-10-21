@@ -34,24 +34,50 @@ when any 3-field combination is identical and non-missing; connected components
 `books.author` is split on commas into a set of authors. "Most popular" is the author
 set with the most sold books (`sum(quantity)`); the per-author ranking is also stored.
 
-## Dashboard
+## Dashboard and AI assistant
 
-A static dashboard (`index.html`, no server needed) shows the results for all five
-stores: overview (unique users, unique author sets, most popular author, best buyer
-with all ids), revenue (top-5 days and the daily revenue chart) and an
-"Ask the data" chat area that answers questions from the computed results.
+`app.py` (FastAPI) serves the dashboard (`index.html`) and a small API; `bookstore.db`
+(SQLite, built by `build_db.py` from the cleaned data) holds all five stores.
 
-Live version (GitHub Pages): https://ulfan39.github.io/bookstore-analytics/
+- Overview / Revenue tabs: unique users, unique author sets, most popular author,
+  best buyer (ids as array), top-5 days, daily revenue chart.
+- Books / Users tabs: server-side tables with filters, sorting and paging.
+- **Assistant panel** (right side): an LLM with tools (OpenAI-compatible function calling,
+  `llm.py`). The model never sees the data and never calculates numbers:
+  - `run_sql` (read-only SELECT on the database), `store_overview`, `count_rows`
+    produce every number it reports;
+  - `set_filters`, `clear_filters`, `sort_table`, `select_store`, `show_view` return
+    UI commands that the browser applies, so the assistant controls the dashboard
+    ("filter out books that has the people names in the title",
+    "select users with e-mails started with s or p").
+- Without the server (e.g. the static GitHub Pages copy) the panel falls back to
+  built-in answers for the main metrics.
 
-Rebuild after re-running the pipeline:
+Run locally:
 
-    python run_all.py <folder with STORE1..STORE5>
-    python build_dashboard.py
+    pip install -r requirements.txt
+    python run_all.py <data folder>          # results.json
+    python build_db.py <data folder>         # bookstore.db
+    python build_dashboard.py                # index.html
+    set LLM_API_KEY=...   (PowerShell: $env:LLM_API_KEY="...")
+    uvicorn app:app --port 8000              # open http://localhost:8000
+
+Environment: `LLM_API_KEY`, `LLM_BASE_URL` (default Groq), `LLM_MODEL`. Any
+OpenAI-compatible provider works (Groq, Gemini, OpenAI, OpenRouter).
+`render.yaml` deploys it on Render (free plan; first request after idle takes ~1 min).
+
+Static copy (GitHub Pages): https://ulfan39.github.io/bookstore-analytics/
+
+## Person names in titles
+
+"Books that have people names in the title" uses a heuristic: a capitalised word in the
+title that is a common given name (curated list + first names that recur at least three
+times among the users and authors of the data). It is not perfect (stage names such as
+"Metallica" are not people names for it, "Mario" is).
 
 ## Assumptions
 
 - Real users are counted over the records in `users.csv`.
 - "Most popular author" is the author *set* with the most sold books; the best
   individual author (counting every book they co-wrote) is shown next to it.
-- The chat area is rule-based: it answers from the pipeline output and does not call
-  an external AI service.
+- Money is USD; EUR prices are converted at 1.2.
